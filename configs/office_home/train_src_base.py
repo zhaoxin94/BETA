@@ -21,7 +21,11 @@ eps = 0.1  # label smoothing
 # training optimizer & scheduler
 epochs = 100
 lr = 0.01
-optimizer = dict(type='SGD', lr=lr, momentum=0.9, weight_decay=1e-3, nesterov=True)
+optimizer = dict(type='SGD',
+                 lr=lr,
+                 momentum=0.9,
+                 weight_decay=1e-3,
+                 nesterov=True)
 
 # log & save
 log_interval = 100

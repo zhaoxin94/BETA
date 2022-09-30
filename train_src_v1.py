@@ -25,13 +25,22 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
-    parser.add_argument('--resume', type=str, help='path to latest checkpoint (default: None)')
-    parser.add_argument('--load', type=str, help='Load init weights for fine-tune (default: None)')
+    parser.add_argument('--resume',
+                        type=str,
+                        help='path to latest checkpoint (default: None)')
+    parser.add_argument('--load',
+                        type=str,
+                        help='Load init weights for fine-tune (default: None)')
     parser.add_argument('--cfgname', help='specify log_file; for debug use')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
-    parser.add_argument('--cfg-options', nargs='+', action=DictAction,
-                        help='override the config; e.g., --cfg-options port=10001 k1=a,b k2="[a,b]"'
-                             'Note that the quotation marks are necessary and that no white space is allowed.')
+    parser.add_argument(
+        '--cfg-options',
+        nargs='+',
+        action=DictAction,
+        help=
+        'override the config; e.g., --cfg-options port=10001 k1=a,b k2="[a,b]"'
+        'Note that the quotation marks are necessary and that no white space is allowed.'
+    )
     args = parser.parse_args()
     return args
 
@@ -45,7 +54,8 @@ def get_cfg(args):
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
     elif cfg.get('work_dir', None) is None:
-        dirname = os.path.dirname(args.config).replace('configs', 'checkpoints', 1)
+        dirname = os.path.dirname(args.config).replace('configs',
+                                                       'checkpoints', 1)
         filename = os.path.splitext(os.path.basename(args.config))[0]
         cfg.work_dir = os.path.join(dirname, filename)
     os.makedirs(cfg.work_dir, exist_ok=True)
@@ -75,7 +85,7 @@ def get_cfg(args):
 
 
 def adjust_lr(optimizer, it, train_iters, gamma=10, power=0.75):
-    decay = (1 + gamma * it / train_iters) ** (-power)
+    decay = (1 + gamma * it / train_iters)**(-power)
     for param_group in optimizer.param_groups:
         param_group['lr'] = param_group['init_lr'] * decay
 
@@ -131,15 +141,14 @@ def main():
     # logger
     logger = build_logger(cfg.work_dir, cfgname='train_source')
     writer = SummaryWriter(log_dir=os.path.join(cfg.work_dir, f'tensorboard'))
-
     '''
     # -----------------------------------------
     # build dataset/dataloader
     # -----------------------------------------
     '''
-    loader_dict = build_office_home_loaders(cfg, loader_list=['src_train', 'src_val'])
+    loader_dict = build_office_home_loaders(
+        cfg, loader_list=['src_train', 'src_val'])
     print(f'==> DataLoader built.')
-
     '''
     # -----------------------------------------
     # build model & optimizer
@@ -153,13 +162,17 @@ def main():
 
     base_params = [v for k, v in model.named_parameters() if 'fc' not in k]
     head_params = [v for k, v in model.named_parameters() if 'fc' in k]
-    param_groups = [{'params': base_params, 'lr': cfg.lr * 0.1},
-                    {'params': head_params, 'lr': cfg.lr}]
+    param_groups = [{
+        'params': base_params,
+        'lr': cfg.lr * 0.1
+    }, {
+        'params': head_params,
+        'lr': cfg.lr
+    }]
     optimizer = build_optimizer(cfg.optimizer, param_groups)
     for param_group in optimizer.param_groups:
         param_group['init_lr'] = param_group['lr']
     print('==> Model built.')
-
     '''
     # -----------------------------------------
     # Start source training
@@ -191,7 +204,8 @@ def main():
         labels = labels.cuda(non_blocking=True)
         bsz = images.shape[0]
 
-        targets = torch.zeros(bsz, cfg.num_classes).cuda().scatter_(1, labels.view(-1, 1), 1)
+        targets = torch.zeros(bsz, cfg.num_classes).cuda().scatter_(
+            1, labels.view(-1, 1), 1)
         targets = (1 - cfg.eps) * targets + cfg.eps / cfg.num_classes
 
         # compute loss
@@ -225,7 +239,8 @@ def main():
             writer.add_scalar(f'Acc/src_train', top1.avg, it)
 
         if it % val_interval == 0 or it == train_iters:
-            val_acc = val(loader_dict['src_val'], model, val_criterion, it, logger, writer)
+            val_acc = val(loader_dict['src_val'], model, val_criterion, it,
+                          logger, writer)
             if val_acc >= val_meter.max_val:
                 model_path = os.path.join(cfg.work_dir, f'best_val.pth')
                 state_dict = {
@@ -236,7 +251,9 @@ def main():
                 torch.save(state_dict, model_path)
 
             val_meter.update(val_acc, idx=it)
-            logger.info(f'Best val_Acc@1: {val_meter.max_val:.2f} (iter={val_meter.max_idx}).')
+            logger.info(
+                f'Best val_Acc@1: {val_meter.max_val:.2f} (iter={val_meter.max_idx}).'
+            )
             model.train()
 
     # save last
