@@ -71,7 +71,7 @@ def get_cfg(args):
     if args.seed != 0:
         cfg.seed = args.seed
     elif not hasattr(cfg, 'seed'):
-        cfg.seed = 42
+        cfg.seed = 2022
     set_seed(cfg.seed)
 
     # resume or load init weights
@@ -130,7 +130,10 @@ def main():
     # args & cfg
     args = parse_args()
     cfg = get_cfg(args)  # may modify cfg according to args
-    cudnn.benchmark = True
+
+    # keep consistency for the same seed
+    cudnn.benchmark = False
+    cudnn.deterministic = True
 
     # write cfg
     timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())

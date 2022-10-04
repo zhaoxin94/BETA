@@ -62,7 +62,7 @@ def get_cfg(args):
     if args.seed != 0:
         cfg.seed = args.seed
     elif not hasattr(cfg, 'seed'):
-        cfg.seed = 42
+        cfg.seed = 2022
     set_seed(cfg.seed)
 
     # resume or load init weights

@@ -6,6 +6,7 @@ import random
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -24,6 +25,7 @@ class AverageMeter(object):
 
 class TrackMeter(object):
     """Compute and store values"""
+
     def __init__(self):
         self.reset()
 
@@ -47,10 +49,11 @@ class TrackMeter(object):
         return sum(self.data[-k:]) / k
 
 
-def set_seed(seed=42):
+def set_seed(seed=2022):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 
 def update_ema(model, model_ema, m=0.999):
@@ -65,19 +68,21 @@ def update_ema(model, model_ema, m=0.999):
 def interleave(x, batch_size):
     # x.shape[0] == batch_size * num_batches
     s = list(x.shape)
-    return x.reshape([-1, batch_size] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
+    return x.reshape([-1, batch_size] + s[1:]).transpose(0, 1).reshape([-1] +
+                                                                       s[1:])
 
 
 def de_interleave(x, batch_size):
     s = list(x.shape)
-    return x.reshape([batch_size, -1] + s[1:]).transpose(0, 1).reshape([-1] + s[1:])
+    return x.reshape([batch_size, -1] + s[1:]).transpose(0, 1).reshape([-1] +
+                                                                       s[1:])
 
 
 def count_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output, target, topk=(1, )):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
         maxk = max(topk)
@@ -99,10 +104,11 @@ def _get_lr(cfg, step):
     if cfg.type == 'Cosine':  # Cosine Anneal
         start_step = cfg.get('start_step', 1)
         eta_min = lr * cfg.decay_rate
-        lr = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * (step - start_step) / cfg.steps)) / 2
+        lr = eta_min + (lr - eta_min) * (
+            1 + math.cos(math.pi * (step - start_step) / cfg.steps)) / 2
     elif cfg.type == 'MultiStep':  # MultiStep
         num_steps = np.sum(step > np.asarray(cfg.decay_steps))
-        lr = lr * (cfg.decay_rate ** num_steps)
+        lr = lr * (cfg.decay_rate**num_steps)
     else:
         raise NotImplementedError(cfg.type)
     return lr
@@ -133,12 +139,12 @@ def adjust_lr_simsiam(cfg, optimizer, step):
 
 
 def format_time(seconds):
-    days = int(seconds / 3600/24)
-    seconds = seconds - days*3600*24
+    days = int(seconds / 3600 / 24)
+    seconds = seconds - days * 3600 * 24
     hours = int(seconds / 3600)
-    seconds = seconds - hours*3600
+    seconds = seconds - hours * 3600
     minutes = int(seconds / 60)
-    seconds = seconds - minutes*60
+    seconds = seconds - minutes * 60
     secondsf = int(seconds)
     seconds = seconds - secondsf
     # millis = int(seconds*1000)
