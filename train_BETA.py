@@ -1,6 +1,11 @@
+from operator import gt
 import os
 import argparse
 import time
+from matplotlib import pyplot as plt
+import pandas as pd
+import seaborn as sns
+import shutil
 
 import numpy as np
 import torch
@@ -28,13 +33,22 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
-    parser.add_argument('--resume', type=str, help='path to latest checkpoint (default: None)')
-    parser.add_argument('--load', type=str, help='Load init weights for fine-tune (default: None)')
+    parser.add_argument('--resume',
+                        type=str,
+                        help='path to latest checkpoint (default: None)')
+    parser.add_argument('--load',
+                        type=str,
+                        help='Load init weights for fine-tune (default: None)')
     parser.add_argument('--cfgname', help='specify log_file; for debug use')
     parser.add_argument('--seed', default=0, type=int, help='random seed')
-    parser.add_argument('--cfg-options', nargs='+', action=DictAction,
-                        help='override the config; e.g., --cfg-options port=10001 k1=a,b k2="[a,b]"'
-                             'Note that the quotation marks are necessary and that no white space is allowed.')
+    parser.add_argument(
+        '--cfg-options',
+        nargs='+',
+        action=DictAction,
+        help=
+        'override the config; e.g., --cfg-options port=10001 k1=a,b k2="[a,b]"'
+        'Note that the quotation marks are necessary and that no white space is allowed.'
+    )
     args = parser.parse_args()
     return args
 
@@ -48,7 +62,8 @@ def get_cfg(args):
     if args.work_dir is not None:
         cfg.work_dir = args.work_dir
     elif cfg.get('work_dir', None) is None:
-        dirname = os.path.dirname(args.config).replace('configs', 'checkpoints', 1)
+        dirname = os.path.dirname(args.config).replace('configs',
+                                                       'checkpoints', 1)
         filename = os.path.splitext(os.path.basename(args.config))[0]
         cfg.work_dir = os.path.join(dirname, filename)
     os.makedirs(cfg.work_dir, exist_ok=True)
@@ -78,7 +93,7 @@ def get_cfg(args):
 
 
 def adjust_lr(optimizer, step, tot_steps, gamma=10, power=0.75):
-    decay = (1 + gamma * step / tot_steps) ** (-power)
+    decay = (1 + gamma * step / tot_steps)**(-power)
     for param_group in optimizer.param_groups:
         param_group['lr'] = param_group['init_lr'] * decay
 
@@ -86,8 +101,13 @@ def adjust_lr(optimizer, step, tot_steps, gamma=10, power=0.75):
 def set_optimizer(model, cfg):
     base_params = [v for k, v in model.named_parameters() if 'fc' not in k]
     head_params = [v for k, v in model.named_parameters() if 'fc' in k]
-    param_groups = [{'params': base_params, 'lr': cfg.lr * 0.1},
-                    {'params': head_params, 'lr': cfg.lr}]
+    param_groups = [{
+        'params': base_params,
+        'lr': cfg.lr * 0.1
+    }, {
+        'params': head_params,
+        'lr': cfg.lr
+    }]
     optimizer = build_optimizer(cfg.optimizer, param_groups)
     for param_group in optimizer.param_groups:
         param_group['init_lr'] = param_group['lr']
@@ -140,7 +160,8 @@ def test(test_loader, model, criterion, epoch, logger, writer, model2=None):
             top1.update(acc1[0], bsz)
 
     all_pred = torch.cat(all_pred)
-    mean_ent = (-all_pred * torch.log(all_pred + 1e-5)).sum(dim=1).mean().item() / np.log(all_pred.size(0))
+    mean_ent = (-all_pred * torch.log(all_pred + 1e-5)).sum(
+        dim=1).mean().item() / np.log(all_pred.size(0))
 
     # writer
     writer.add_scalar(f'Loss/divm_test', losses.avg, epoch)
@@ -157,7 +178,14 @@ def test(test_loader, model, criterion, epoch, logger, writer, model2=None):
     return top1.avg, mean_ent
 
 
-def test_class_acc(test_loader, model, criterion, it, logger, writer, cfg, model2=None):
+def test_class_acc(test_loader,
+                   model,
+                   criterion,
+                   it,
+                   logger,
+                   writer,
+                   cfg,
+                   model2=None):
     """ test target """
     model.eval()
     if model2 is not None:
@@ -192,7 +220,8 @@ def test_class_acc(test_loader, model, criterion, it, logger, writer, cfg, model
 
     all_labels = torch.cat(all_labels)
     all_pred = torch.cat(all_pred)
-    mean_ent = (-all_pred * torch.log(all_pred + 1e-5)).sum(dim=1).mean().item() / np.log(all_pred.size(0))
+    mean_ent = (-all_pred * torch.log(all_pred + 1e-5)).sum(
+        dim=1).mean().item() / np.log(all_pred.size(0))
     pred_max = all_pred.max(dim=1).indices
 
     # class-wise acc
@@ -263,7 +292,9 @@ def pred_target(test_loader, model, epoch, logger, cfg, model2=None):
     # logger
     time2 = time.time()
     pred_time = format_time(time2 - time1)
-    logger.info(f'Predict target at epoch [{epoch}]: psl_acc: {psl_acc:.2f}, time: {pred_time}')
+    logger.info(
+        f'Predict target at epoch [{epoch}]: psl_acc: {psl_acc:.2f}, time: {pred_time}'
+    )
     return all_psl, all_labels, all_pred
 
 
@@ -326,7 +357,8 @@ def dist_train(warmup_loader, model, optimizer, epoch, logger, cfg, pred_mem):
         pred_tgt = F.softmax(logits, dim=1)
         loss_kl = nn.KLDivLoss(reduction='batchmean')(pred_tgt.log(), targets)
 
-        loss_entropy = (-pred_tgt * torch.log(pred_tgt + 1e-5)).sum(dim=1).mean()
+        loss_entropy = (-pred_tgt *
+                        torch.log(pred_tgt + 1e-5)).sum(dim=1).mean()
         pred_mean = pred_tgt.mean(dim=0)
         loss_gentropy = torch.sum(-pred_mean * torch.log(pred_mean + 1e-5))
         loss_entropy -= loss_gentropy
@@ -347,13 +379,15 @@ def dist_train(warmup_loader, model, optimizer, epoch, logger, cfg, pred_mem):
             lam = np.random.beta(alpha, alpha)
             index = torch.randperm(bsz).cuda()
             mixed_images = lam * images + (1 - lam) * images[index, :]
-            mixed_targets = (lam * pred_tgt + (1 - lam) * pred_tgt[index, :]).detach()
+            mixed_targets = (lam * pred_tgt +
+                             (1 - lam) * pred_tgt[index, :]).detach()
 
             update_batch_stats(model, False)
             mixed_logits = model(mixed_images)
             update_batch_stats(model, True)
             mixed_pred_tgt = F.softmax(mixed_logits, dim=1)
-            loss_mix_kl = cfg.lam_mix * nn.KLDivLoss(reduction='batchmean')(mixed_pred_tgt.log(), mixed_targets)
+            loss_mix_kl = cfg.lam_mix * nn.KLDivLoss(reduction='batchmean')(
+                mixed_pred_tgt.log(), mixed_targets)
             loss_mix_kl.backward()
 
         optimizer.step()
@@ -365,23 +399,19 @@ def dist_train(warmup_loader, model, optimizer, epoch, logger, cfg, pred_mem):
         # logger
         if batch_idx % cfg.log_interval == 0:
             lr = optimizer.param_groups[0]['lr']
-            logger.info(
-                f'Epoch [{epoch}][{batch_idx}/{num_iters}] - '
-                f'Batch time: {batch_time.avg:.2f}, '
-                f'lr: {lr:.6f}, '
-                f'loss_kl: {losses_kl.avg:.3f}, '
-                f'loss_ent: {losses_ent.avg:.3f}, '
-                f'distill_loss: {losses.avg:.3f}'
-            )
+            logger.info(f'Epoch [{epoch}][{batch_idx}/{num_iters}] - '
+                        f'Batch time: {batch_time.avg:.2f}, '
+                        f'lr: {lr:.6f}, '
+                        f'loss_kl: {losses_kl.avg:.3f}, '
+                        f'loss_ent: {losses_ent.avg:.3f}, '
+                        f'distill_loss: {losses.avg:.3f}')
 
     t2 = time.time()
     epoch_time = format_time(t2 - t1)
-    logger.info(
-        f'Epoch [{epoch}] - train_time: {epoch_time}, '
-        f'loss_kl: {losses_kl.avg:.3f}, '
-        f'loss_ent: {losses_ent.avg:.3f}, '
-        f'distill_loss: {losses.avg:.3f}'
-    )
+    logger.info(f'Epoch [{epoch}] - train_time: {epoch_time}, '
+                f'loss_kl: {losses_kl.avg:.3f}, '
+                f'loss_ent: {losses_ent.avg:.3f}, '
+                f'distill_loss: {losses.avg:.3f}')
 
 
 def eval_train(eval_loader, model):
@@ -390,7 +420,8 @@ def eval_train(eval_loader, model):
     criterion = nn.CrossEntropyLoss(reduction='none').cuda()
 
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(eval_loader):  # shuffle=False
+        for batch_idx, (inputs,
+                        targets) in enumerate(eval_loader):  # shuffle=False
             inputs = inputs.cuda()
             targets = targets.cuda()
 
@@ -404,14 +435,18 @@ def eval_train(eval_loader, model):
 
     # fit a two-component GMM to the loss
     input_loss = losses.reshape(-1, 1)
-    gmm = GaussianMixture(n_components=2, max_iter=10, tol=1e-2, reg_covar=5e-4)
+    gmm = GaussianMixture(n_components=2,
+                          max_iter=10,
+                          tol=1e-2,
+                          reg_covar=5e-4)
     gmm.fit(input_loss)
     prob = gmm.predict_proba(input_loss)
     prob = prob[:, gmm.means_.argmin()]
     return prob, losses
 
 
-def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epoch, logger, cfg):
+def train(label_loader, unlabel_loader, model, model2, criterion, optimizer,
+          epoch, logger, cfg):
     batch_time = AverageMeter()
     losses = AverageMeter()
     losses_trans = AverageMeter()
@@ -442,7 +477,8 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
         # to cuda
         inputs_x1, inputs_x2 = inputs_x1.cuda(), inputs_x2.cuda()
         inputs_u1, inputs_u2 = inputs_u1.cuda(), inputs_u2.cuda()
-        targets_x = torch.zeros(batch_size, cfg.num_classes).scatter_(1, targets_x.view(-1, 1), 1).cuda()
+        targets_x = torch.zeros(batch_size, cfg.num_classes).scatter_(
+            1, targets_x.view(-1, 1), 1).cuda()
         w_x = w_x.view(-1, 1).cuda()
 
         # co-refinement and co-guessing
@@ -451,9 +487,10 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
             outputs_x1 = model(inputs_x1)
             outputs_x2 = model(inputs_x2)
 
-            px = (torch.softmax(outputs_x1, dim=1) + torch.softmax(outputs_x2, dim=1)) / 2
+            px = (torch.softmax(outputs_x1, dim=1) +
+                  torch.softmax(outputs_x2, dim=1)) / 2
             px = w_x * targets_x + (1 - w_x) * px
-            ptx = px ** (1 / cfg.T_sharpen)  # temparature sharpening
+            ptx = px**(1 / cfg.T_sharpen)  # temparature sharpening
 
             targets_x = ptx / ptx.sum(dim=1, keepdim=True)  # normalize
             targets_x = targets_x.detach()
@@ -464,9 +501,10 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
             outputs_u21 = model2(inputs_u1)
             outputs_u22 = model2(inputs_u2)
 
-            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(outputs_u12, dim=1) +
-                  torch.softmax(outputs_u21, dim=1) + torch.softmax(outputs_u22, dim=1)) / 4
-            ptu = pu ** (1 / cfg.T_sharpen)
+            pu = (torch.softmax(outputs_u11, dim=1) + torch.softmax(
+                outputs_u12, dim=1) + torch.softmax(outputs_u21, dim=1) +
+                  torch.softmax(outputs_u22, dim=1)) / 4
+            ptu = pu**(1 / cfg.T_sharpen)
 
             targets_u = ptu / ptu.sum(dim=1, keepdim=True)  # normalize
             targets_u = targets_u.detach()
@@ -475,8 +513,10 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
         lam = np.random.beta(cfg.alpha, cfg.alpha)
         lam = max(lam, 1 - lam)
 
-        all_inputs = torch.cat([inputs_x1, inputs_x2, inputs_u1, inputs_u2], dim=0)
-        all_targets = torch.cat([targets_x, targets_x, targets_u, targets_u], dim=0)
+        all_inputs = torch.cat([inputs_x1, inputs_x2, inputs_u1, inputs_u2],
+                               dim=0)
+        all_targets = torch.cat([targets_x, targets_x, targets_u, targets_u],
+                                dim=0)
 
         idx = torch.randperm(all_inputs.size(0))
 
@@ -493,17 +533,20 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
             logits = de_interleave(logits, batch_size)
 
             # loss
-            Lx, Lu = criterion(
-                logits[:batch_size * 2], mixed_target[:batch_size * 2],
-                logits[batch_size * 2:], mixed_target[batch_size * 2:]
-            )
+            Lx, Lu = criterion(logits[:batch_size * 2],
+                               mixed_target[:batch_size * 2],
+                               logits[batch_size * 2:],
+                               mixed_target[batch_size * 2:])
             cur_epoch = epoch - 1 + batch_idx / num_iters
-            lam_u = cfg.lam_u * np.clip((cur_epoch - cfg.warmup_epochs) / cfg.rampup_epochs, 0., 1.)
+            lam_u = cfg.lam_u * np.clip(
+                (cur_epoch - cfg.warmup_epochs) / cfg.rampup_epochs, 0., 1.)
             loss = Lx + lam_u * Lu
             losses_u.update(Lu.item())
         else:
-            mixed_input = lam * input_a[:batch_size * 2] + (1 - lam) * input_b[:batch_size * 2]
-            mixed_target = lam * target_a[:batch_size * 2] + (1 - lam) * target_b[:batch_size * 2]
+            mixed_input = lam * input_a[:batch_size * 2] + (
+                1 - lam) * input_b[:batch_size * 2]
+            mixed_target = lam * target_a[:batch_size * 2] + (
+                1 - lam) * target_b[:batch_size * 2]
 
             mixed_inputs = interleave(mixed_input, batch_size)
             logits = model(mixed_inputs)
@@ -553,13 +596,80 @@ def train(label_loader, unlabel_loader, model, model2, criterion, optimizer, epo
 
     t2 = time.time()
     epoch_time = format_time(t2 - t1)
-    logger.info(
-        f'Epoch [{epoch}] - train_time: {epoch_time}, '
-        f'loss_trans: {losses_trans.avg:.3f}, '
-        f'loss_x: {losses_x.avg:.3f}, '
-        f'loss: {losses.avg:.3f}'
-    )
+    logger.info(f'Epoch [{epoch}] - train_time: {epoch_time}, '
+                f'loss_trans: {losses_trans.avg:.3f}, '
+                f'loss_x: {losses_x.avg:.3f}, '
+                f'loss: {losses.avg:.3f}')
     return losses.avg, losses_x.avg, losses_u.avg
+
+
+# zhaoxin add
+def plot_confmat(gt_labels, tgt_psl, cfg):
+    gt_labels = gt_labels.cpu().numpy()
+    tgt_psl = tgt_psl.cpu().numpy()
+    confusion_matrix = np.zeros((cfg.num_classes, cfg.num_classes))
+    for gt_label, pseudo_label in zip(gt_labels, tgt_psl):
+        confusion_matrix[gt_label, pseudo_label] += 1
+
+    def draw_confusion_matrix(trans_mat, pic_name):
+        trans_prob_mat = (trans_mat.T / np.sum(trans_mat, 1)).T
+
+        label = ["{}".format(i) for i in range(1, trans_mat.shape[0] + 1)]
+        df = pd.DataFrame(trans_prob_mat, index=label, columns=label)
+
+        # Plot
+        plt.figure(figsize=(12, 12))
+        sns.set(font_scale=20.0 / cfg.num_classes)
+        sns.heatmap(df,
+                    cbar=False,
+                    cmap='Blues',
+                    fmt=".2f",
+                    linewidths=0,
+                    annot=True,
+                    xticklabels=False,
+                    yticklabels=False)
+
+        plt.tight_layout()
+        plt.savefig(pic_name, transparent=True, dpi=800)
+
+    draw_confusion_matrix(confusion_matrix,
+                          os.path.join(cfg.work_dir, "source_only.jpg"))
+
+
+def reorginaze_samples(test_loader, gt_labels, tgt_psl, pred_mem, cfg):
+    gt_labels = gt_labels.cpu().numpy()
+    tgt_psl = tgt_psl.cpu().numpy()
+    class_list = []
+    paths = test_loader.dataset.paths
+    for path in paths:
+        class_name = path.split('/')[-2]
+        if class_name not in class_list:
+            class_list.append(class_name)
+    class_list.sort()
+
+    class_dict = {}
+    for i in range(len(class_list)):
+        class_dict[i] = class_list[i]
+
+    print('done')
+    print('good')
+
+    for i in range(len(gt_labels)):
+        gt_label = gt_labels[i]
+        ps_label = tgt_psl[i]
+        path = paths[i]
+        original_name = path.split('/')[-1]
+        confidence = torch.max(pred_mem[i])
+        new_name = f'gt={class_dict[gt_label]}_pre={class_dict[ps_label]}_confidence={confidence}' + original_name
+        if gt_label == ps_label:
+            save_dir = os.path.join(cfg.work_dir, 'classification_results',
+                                    'correct', class_dict[gt_label])
+        else:
+            save_dir = os.path.join(cfg.work_dir, 'classification_results',
+                                    'wrong', class_dict[gt_label])
+        os.makedirs(save_dir, exist_ok=True)
+        new_path = os.path.join(save_dir, new_name)
+        shutil.copy(path, new_path)
 
 
 def main():
@@ -577,7 +687,6 @@ def main():
     # logger
     logger = build_logger(cfg.work_dir, cfgname=f'train')
     writer = SummaryWriter(log_dir=os.path.join(cfg.work_dir, f'tensorboard'))
-
     '''
     # -----------------------------------------
     # build model & optimizer
@@ -601,34 +710,37 @@ def main():
     train_criterion = build_loss(cfg.loss.train).cuda()
     test_criterion = build_loss(cfg.loss.test).cuda()
     print('==> Model built.')
-
     '''
     # -----------------------------------------
     # build dataset/dataloader
     # -----------------------------------------
     '''
     test_loader = build_divm_loader(cfg, mode='test')
-
     '''
     # -----------------------------------------
     # Test source model before distill 
     # -----------------------------------------
     '''
     if cfg.get('test_class_acc', False):
-        test_class_acc(test_loader, src_model, test_criterion, 0, logger, writer, cfg)
+        test_class_acc(test_loader, src_model, test_criterion, 0, logger,
+                       writer, cfg)
     else:
         test(test_loader, src_model, test_criterion, 0, logger, writer)
-
     '''
     # -----------------------------------------
     # Predict target 
     # -----------------------------------------
     '''
-    tgt_psl, gt_labels, pred_mem = pred_target(test_loader, src_model, 0, logger, cfg)
+    tgt_psl, gt_labels, pred_mem = pred_target(test_loader, src_model, 0,
+                                               logger, cfg)
+
+    # zhaoxin add, plot confusion_matrix
+    plot_confmat(gt_labels, tgt_psl, cfg)
+    reorginaze_samples(test_loader, gt_labels, tgt_psl, pred_mem, cfg)
+
     warmup_loader = build_divm_loader(cfg, mode='warmup', psl=tgt_psl)
     warmup_loader_idx = build_divm_loader(cfg, mode='warmup', return_idx=True)
     eval_train_loader = build_divm_loader(cfg, mode='eval_train', psl=tgt_psl)
-
     '''
     # -----------------------------------------
     # Start target training
@@ -647,7 +759,8 @@ def main():
 
         # momentum update pred_mem
         if epoch % cfg.pred_interval == 0:
-            _, _, pred_t = pred_target(test_loader, model1, epoch, logger, cfg, model2)
+            _, _, pred_t = pred_target(test_loader, model1, epoch, logger, cfg,
+                                       model2)
             pred_mem = cfg.ema * pred_mem + (1 - cfg.ema) * pred_t
             model1.train()
             model2.train()
@@ -659,8 +772,10 @@ def main():
         else:
             # distill loss
             logger.info(f'Start distill training at epoch [{epoch}]...')
-            dist_train(warmup_loader_idx, model1, optimizer1, epoch, logger, cfg, pred_mem)
-            dist_train(warmup_loader_idx, model2, optimizer2, epoch, logger, cfg, pred_mem)
+            dist_train(warmup_loader_idx, model1, optimizer1, epoch, logger,
+                       cfg, pred_mem)
+            dist_train(warmup_loader_idx, model2, optimizer2, epoch, logger,
+                       cfg, pred_mem)
 
             # calc GMM probs
             logger.info(f'==> Start evaluation at epoch [{epoch}]...')
@@ -680,38 +795,55 @@ def main():
             unlabel_indices = (~mask1).nonzero()[0]
             masked_probs = prob2[mask1]
             masked_psl = tgt_psl[mask1]
-            label_loader = build_divm_loader(cfg, mode='label', indices=label_indices, probs=masked_probs, psl=masked_psl)
-            unlabel_loader = build_divm_loader(cfg, mode='unlabel', indices=unlabel_indices)
+            label_loader = build_divm_loader(cfg,
+                                             mode='label',
+                                             indices=label_indices,
+                                             probs=masked_probs,
+                                             psl=masked_psl)
+            unlabel_loader = build_divm_loader(cfg,
+                                               mode='unlabel',
+                                               indices=unlabel_indices)
             if len(label_loader) > 0 and len(unlabel_loader) > 0:
-                train(label_loader, unlabel_loader, model1, model2, train_criterion, optimizer1,
-                      epoch, logger, cfg)
+                train(label_loader, unlabel_loader, model1, model2,
+                      train_criterion, optimizer1, epoch, logger, cfg)
             else:
-                logger.info(f'Skip DivM for model_1 at epoch [{epoch}] - num_label: {len(label_indices)}, '
-                            f'num_unlabel: {len(unlabel_indices)}.')
+                logger.info(
+                    f'Skip DivM for model_1 at epoch [{epoch}] - num_label: {len(label_indices)}, '
+                    f'num_unlabel: {len(unlabel_indices)}.')
 
             label_indices = mask2.nonzero()[0]
             unlabel_indices = (~mask2).nonzero()[0]
             masked_probs = prob1[mask2]
             masked_psl = tgt_psl[mask2]
-            label_loader = build_divm_loader(cfg, mode='label', indices=label_indices, probs=masked_probs, psl=masked_psl)
-            unlabel_loader = build_divm_loader(cfg, mode='unlabel', indices=unlabel_indices)
+            label_loader = build_divm_loader(cfg,
+                                             mode='label',
+                                             indices=label_indices,
+                                             probs=masked_probs,
+                                             psl=masked_psl)
+            unlabel_loader = build_divm_loader(cfg,
+                                               mode='unlabel',
+                                               indices=unlabel_indices)
             if len(label_loader) > 0 and len(unlabel_loader) > 0:
-                train(label_loader, unlabel_loader, model2, model1, train_criterion, optimizer2,
-                      epoch, logger, cfg)
+                train(label_loader, unlabel_loader, model2, model1,
+                      train_criterion, optimizer2, epoch, logger, cfg)
             else:
-                logger.info(f'Skip DivM for model_2 at epoch [{epoch}] - num_label: {len(label_indices)}, '
-                            f'num_unlabel: {len(unlabel_indices)}.')
+                logger.info(
+                    f'Skip DivM for model_2 at epoch [{epoch}] - num_label: {len(label_indices)}, '
+                    f'num_unlabel: {len(unlabel_indices)}.')
 
         if epoch % cfg.test_interval == 0 or epoch == cfg.epochs:
             if cfg.get('test_class_acc', False):
                 test_acc, mean_ent, pred_max = \
                     test_class_acc(test_loader, model1, test_criterion, epoch, logger, writer, cfg, model2)
             else:
-                test_acc, mean_ent = test(test_loader, model1, test_criterion, epoch, logger, writer, model2)
+                test_acc, mean_ent = test(test_loader, model1, test_criterion,
+                                          epoch, logger, writer, model2)
             test_meter.update(test_acc, idx=epoch)
 
     # We print the best test_acc but use the last checkpoint for fine-tuning.
-    logger.info(f'Best test_Acc@1: {test_meter.max_val:.2f} (epoch={test_meter.max_idx}).')
+    logger.info(
+        f'Best test_Acc@1: {test_meter.max_val:.2f} (epoch={test_meter.max_idx}).'
+    )
 
     # save last
     model_path = os.path.join(cfg.work_dir, 'last.pth')
