@@ -7,4 +7,6 @@ tmp/
 demo/
 data/
 .ipynb_checkpoints/
-scripts/
+output/
+output_old/
+checkpoints_old/

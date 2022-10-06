@@ -735,8 +735,8 @@ def main():
                                                logger, cfg)
 
     # zhaoxin add, plot confusion_matrix
-    plot_confmat(gt_labels, tgt_psl, cfg)
-    reorginaze_samples(test_loader, gt_labels, tgt_psl, pred_mem, cfg)
+    # plot_confmat(gt_labels, tgt_psl, cfg)
+    # reorginaze_samples(test_loader, gt_labels, tgt_psl, pred_mem, cfg)
 
     warmup_loader = build_divm_loader(cfg, mode='warmup', psl=tgt_psl)
     warmup_loader_idx = build_divm_loader(cfg, mode='warmup', return_idx=True)
