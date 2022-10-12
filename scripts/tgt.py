@@ -79,6 +79,8 @@ if __name__ == '__main__':
         program = 'train_DINE.py'
     elif args.method == 'BETA':
         program = 'train_BETA.py'
+    elif args.method == 'BETA2':
+        program = 'train_BETA2.py'
     else:
         raise NotImplementedError
 
